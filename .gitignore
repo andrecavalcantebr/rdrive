@@ -1,0 +1,11 @@
+# Logs and caches (if accidentally created with literal paths)
+~/
+.cache/
+*.log
+
+# Backup files
+*.bak
+
+# Temporary files
+*.tmp
+*~
