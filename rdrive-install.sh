@@ -62,7 +62,11 @@ path_expand() {
     printf '%s' "$HOME"
     return
   fi
-  if [[ "$p" == ~/* ]]; then
+  if [[ "$p" == "$HOME/~/"* ]]; then
+    printf '%s' "${HOME}/${p#"$HOME/~/"}"
+    return
+  fi
+  if [[ "$p" == "~/"* ]]; then
     printf '%s' "${HOME}/${p#~/}"
     return
   fi
@@ -90,6 +94,30 @@ normalize_runtime_paths() {
   MOUNT_BASE="$(realpath -m "$(path_expand "$MOUNT_BASE")")"
   CACHE_DIR="$(realpath -m "$(path_expand "$CACHE_DIR")")"
   LOG_DIR="$(realpath -m "$(path_expand "$LOG_DIR")")"
+}
+
+sudo_run() {
+  if sudo -n true >/dev/null 2>&1; then
+    sudo "$@"
+    return
+  fi
+
+  if [[ -n "${RDRIVE_SUDO_PASS:-}" ]]; then
+    printf '%s\n' "$RDRIVE_SUDO_PASS" | sudo -S "$@"
+    return
+  fi
+
+  if [[ ! -t 0 ]] && command -v zenity >/dev/null 2>&1; then
+    local sudo_pass
+    sudo_pass="$(zenity --password \
+      --title="RDrive - senha administrativa" \
+      --width=420 \
+      --text="Digite a senha de administrador para concluir a instalação." 2>/dev/null)" || die "operação cancelada: senha administrativa não informada"
+    printf '%s\n' "$sudo_pass" | sudo -S "$@"
+    return
+  fi
+
+  sudo "$@"
 }
 
 # --------- Parser (DATA ONLY) ----------
@@ -125,10 +153,19 @@ load_rdrive_conf() {
 
     # REMOTE "name","root","mount","creds"
     if [[ "$line" =~ ^REMOTE[[:space:]]+\"([^\"]+)\"[[:space:]]*,[[:space:]]*\"([^\"]*)\"[[:space:]]*,[[:space:]]*\"([^\"]+)\"[[:space:]]*,[[:space:]]*\"([^\"]+)\"[[:space:]]*$ ]]; then
+      local cred_path
+      cred_path="$(path_expand "${BASH_REMATCH[4]}")"
+      if [[ "$cred_path" == "~/"* ]]; then
+        cred_path="${HOME}/${cred_path#~/}"
+      fi
+      if [[ "$cred_path" == "$HOME/~/"* ]]; then
+        cred_path="${HOME}/${cred_path#"$HOME/~/"}"
+      fi
+
       REMOTE_NAMES+=("${BASH_REMATCH[1]}")
       REMOTE_ROOT_IDS+=("${BASH_REMATCH[2]}")
       REMOTE_MOUNT_SUBS+=("${BASH_REMATCH[3]}")
-      REMOTE_CREDS+=("$(realpath -m "$(path_expand "${BASH_REMATCH[4]}")")")
+      REMOTE_CREDS+=("$(realpath -m "$cred_path")")
       continue
     fi
 
@@ -166,8 +203,8 @@ install_deps() {
 
   if [[ "$need_update" -eq 1 ]]; then
     echo "[1/4] instalando dependências (rclone, fuse3, python3)..."
-    sudo apt-get update
-    sudo apt-get install -y rclone fuse3 python3
+    sudo_run apt-get update
+    sudo_run apt-get install -y rclone fuse3 python3
   else
     echo "[1/4] dependências já instaladas."
   fi
@@ -182,7 +219,7 @@ ensure_fuse_allow_other() {
   fi
 
   echo "habilitando user_allow_other em $fuse_conf (necessário para --allow-other)..."
-  sudo sh -c '
+  sudo_run sh -c '
 set -e
 conf="/etc/fuse.conf"
 touch "$conf"
@@ -286,7 +323,11 @@ path_expand(){
     printf "%s" "$HOME"
     return
   fi
-  if [[ "$p" == ~/* ]]; then
+  if [[ "$p" == "$HOME/~/"* ]]; then
+    printf "%s" "${HOME}/${p#"$HOME/~/"}"
+    return
+  fi
+  if [[ "$p" == "~/"* ]]; then
     printf "%s" "${HOME}/${p#~/}"
     return
   fi
@@ -354,10 +395,19 @@ load_rdrive_conf() {
     [[ -z "$line" ]] && continue
 
     if [[ "$line" =~ ^REMOTE[[:space:]]+\"([^\"]+)\"[[:space:]]*,[[:space:]]*\"([^\"]*)\"[[:space:]]*,[[:space:]]*\"([^\"]+)\"[[:space:]]*,[[:space:]]*\"([^\"]+)\"[[:space:]]*$ ]]; then
+      local cred_path
+      cred_path="$(path_expand "${BASH_REMATCH[4]}")"
+      if [[ "$cred_path" == "~/"* ]]; then
+        cred_path="${HOME}/${cred_path#~/}"
+      fi
+      if [[ "$cred_path" == "$HOME/~/"* ]]; then
+        cred_path="${HOME}/${cred_path#"$HOME/~/"}"
+      fi
+
       REMOTE_NAMES+=("${BASH_REMATCH[1]}")
       REMOTE_ROOT_IDS+=("${BASH_REMATCH[2]}")
       REMOTE_MOUNT_SUBS+=("${BASH_REMATCH[3]}")
-      REMOTE_CREDS+=("$(realpath -m "$(path_expand "${BASH_REMATCH[4]}")")")
+      REMOTE_CREDS+=("$(realpath -m "$cred_path")")
       continue
     fi
 

@@ -705,6 +705,51 @@ system_run_with_progress() {
   return "$rc"
 }
 
+system_open_terminal_command() {
+  local title="$1"
+  local shell_cmd="$2"
+
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    x-terminal-emulator -T "$title" -e bash -lc "$shell_cmd"
+    return $?
+  fi
+
+  if command -v gnome-terminal >/dev/null 2>&1; then
+    gnome-terminal --wait --title="$title" -- bash -lc "$shell_cmd"
+    return $?
+  fi
+
+  ui_warning "Nenhum emulador de terminal foi encontrado. Executando no shell atual."
+  bash -lc "$shell_cmd"
+}
+
+system_run_interactive_with_log() {
+  local title="$1"
+  shift
+
+  mkdir -p "$LOG_DIR"
+  touch "$RUN_LOG"
+
+  local command_line shell_cmd rc
+  printf -v command_line '%q ' "$@"
+  printf -v shell_cmd 'set -o pipefail; %s 2>&1 | tee -a %q; rc=${PIPESTATUS[0]}; echo; echo "Pressione Enter para fechar esta janela..."; read -r _; exit "$rc"' "$command_line" "$RUN_LOG"
+
+  {
+    echo "# ${title}"
+    echo "# Início: $(date '+%F %T')"
+  } >> "$RUN_LOG"
+
+  system_open_terminal_command "$title" "$shell_cmd"
+  rc=$?
+
+  {
+    echo "# Fim: $(date '+%F %T')"
+    echo "# Código de saída: ${rc}"
+  } >> "$RUN_LOG"
+
+  return "$rc"
+}
+
 ui_show_log() {
   zenity --text-info \
     --title="Log da execução" \
@@ -726,7 +771,7 @@ install_scripts_flow() {
     --width=640 \
     --text="Executar $INSTALL_SCRIPT agora?" >/dev/null 2>&1 || return 0
 
-  if system_run_with_progress "Instalando scripts" "$INSTALL_SCRIPT"; then
+  if system_run_interactive_with_log "Instalando scripts" "$INSTALL_SCRIPT"; then
     ui_info "Instalação concluída."
   else
     ui_warning "Instalação terminou com erro. Veja o log."
@@ -779,7 +824,7 @@ refresh_remote_flow() {
     --width=700 \
     --text="Remote selecionado: ${remote_name}\n\nAbra o navegador no perfil correto desta conta e, em seguida, clique em Autorizar." >/dev/null 2>&1 || return 0
 
-  if system_run_with_progress "Autorizando ${remote_name}" "$BIN_REFRESH" "$remote_name"; then
+  if system_run_interactive_with_log "Autorizando ${remote_name}" "$BIN_REFRESH" "$remote_name"; then
     ui_info "Autorização concluída para '${remote_name}'."
   else
     ui_warning "Falha na autorização de '${remote_name}'. Veja o log."
@@ -788,27 +833,125 @@ refresh_remote_flow() {
   ui_show_log
 }
 
+uninstall_scripts_flow() {
+  if ! system_scripts_installed; then
+    ui_info "Scripts não estão instalados."
+    return 0
+  fi
+
+  zenity --question \
+    --title="Confirmar desinstalação" \
+    --ok-label="Desinstalar" \
+    --cancel-label="Cancelar" \
+    --width=720 \
+    --text="Desinstalar scripts do RDrive?\n\nSerão removidos:\n- Scripts em ~/.local/lib/rdrive/\n- Links em ~/.local/bin/\n- Autostart em ~/.config/autostart/\n\nO arquivo de configuração pode ser removido opcionalmente." >/dev/null 2>&1 || return 0
+
+  local unmount_first="no"
+  if [[ -x "$BIN_MOUNT" ]]; then
+    if zenity --question \
+      --title="Desmontar remotes" \
+      --ok-label="Sim" \
+      --cancel-label="Não" \
+      --width=640 \
+      --text="Desmontar todos os remotes antes de desinstalar?" >/dev/null 2>&1; then
+      unmount_first="yes"
+    fi
+  fi
+
+  local remove_conf="no"
+  if [[ -f "$CONF_FILE" ]]; then
+    if zenity --question \
+      --title="Remover configuração" \
+      --ok-label="Sim" \
+      --cancel-label="Não" \
+      --width=640 \
+      --text="Remover também o arquivo de configuração?\n\n$CONF_FILE" >/dev/null 2>&1; then
+      remove_conf="yes"
+    fi
+  fi
+
+  local result=""
+
+  if [[ "$unmount_first" == "yes" ]]; then
+    result+="Desmontando remotes...\n"
+    if command -v fusermount3 >/dev/null 2>&1; then
+      config_load "$CONF_FILE" 2>/dev/null || true
+      local i
+      for i in "${!REMOTE_NAMES[@]}"; do
+        local target="${MOUNT_BASE}/${REMOTE_MOUNT_SUBS[$i]}"
+        if mountpoint -q "$target" 2>/dev/null; then
+          fusermount3 -u "$target" 2>/dev/null && result+="  ✓ Desmontado: $target\n" || result+="  ✗ Falha: $target\n"
+        fi
+      done
+    fi
+    result+="\n"
+  fi
+
+  result+="Removendo scripts...\n"
+
+  if [[ -d "${HOME}/.local/lib/rdrive" ]]; then
+    rm -rf "${HOME}/.local/lib/rdrive" && result+="  ✓ ~/.local/lib/rdrive\n" || result+="  ✗ Falha ao remover ~/.local/lib/rdrive\n"
+  fi
+
+  if [[ -L "$BIN_MOUNT" ]]; then
+    rm -f "$BIN_MOUNT" && result+="  ✓ $BIN_MOUNT\n" || result+="  ✗ Falha ao remover $BIN_MOUNT\n"
+  fi
+  if [[ -L "$BIN_REFRESH" ]]; then
+    rm -f "$BIN_REFRESH" && result+="  ✓ $BIN_REFRESH\n" || result+="  ✗ Falha ao remover $BIN_REFRESH\n"
+  fi
+  if [[ -L "${HOME}/.local/bin/rdrive-umount.sh" ]]; then
+    rm -f "${HOME}/.local/bin/rdrive-umount.sh" && result+="  ✓ ~/.local/bin/rdrive-umount.sh\n" || result+="  ✗ Falha\n"
+  fi
+
+  local autostart_file="${HOME}/.config/autostart/rdrive.desktop"
+  if [[ -f "$autostart_file" ]]; then
+    rm -f "$autostart_file" && result+="  ✓ $autostart_file\n" || result+="  ✗ Falha ao remover autostart\n"
+  fi
+
+  result+="\n"
+
+  if [[ "$remove_conf" == "yes" ]]; then
+    result+="Removendo configuração...\n"
+    if [[ -f "$CONF_FILE" ]]; then
+      rm -f "$CONF_FILE" && result+="  ✓ $CONF_FILE\n" || result+="  ✗ Falha ao remover $CONF_FILE\n"
+    fi
+    result+="\n"
+  fi
+
+  result+="Desinstalação concluída."
+
+  zenity --info \
+    --title="Desinstalação" \
+    --width=680 \
+    --text="$result" >/dev/null 2>&1 || true
+
+  return 0
+}
+
 main_menu_loop() {
   while true; do
     config_load "$CONF_FILE" || true
 
     local refresh_label="Refresh de remote (OAuth)"
+    local uninstall_label="Desinstalar scripts"
     if ! system_scripts_installed; then
       refresh_label="Refresh de remote (indisponível: instale scripts antes)"
+      uninstall_label="Desinstalar scripts (indisponível: não instalado)"
     fi
 
     local action
     action="$(zenity --list \
       --title="Menu principal" \
       --ok-label="OK" \
-      --cancel-label="Cancelar" \
-      --width=860 --height=380 \
+      --cancel-label="Fechar" \
+      --width=860 --height=440 \
       --text="Escolha uma ação:" \
       --column="Opção" \
       "Visualizar arquivo atual" \
       "Editar configurações" \
       "Instalar scripts" \
-      "$refresh_label" 2>/dev/null)" || break
+      "$refresh_label" \
+      "$uninstall_label" 2>/dev/null)" || break
 
     case "$action" in
       "Visualizar arquivo atual")
@@ -825,6 +968,12 @@ main_menu_loop() {
         ;;
       "Refresh de remote (indisponível: instale scripts antes)")
         ui_warning "Opção indisponível. Execute 'Instalar scripts' primeiro."
+        ;;
+      "Desinstalar scripts")
+        uninstall_scripts_flow
+        ;;
+      "Desinstalar scripts (indisponível: não instalado)")
+        ui_info "Scripts não estão instalados."
         ;;
     esac
   done
