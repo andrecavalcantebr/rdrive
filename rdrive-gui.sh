@@ -62,7 +62,7 @@ path_expand() {
     return
   fi
 
-  if [[ "$p" == ~/* ]]; then
+  if [[ "$p" == "~/"* ]]; then
     printf '%s' "${HOME}/${p#~/}"
     return
   fi
