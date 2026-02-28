@@ -658,14 +658,14 @@ maybe_create_example_conf() {
   mkdir -p "$CONF_DIR"
   if [[ ! -f "$CONF_FILE" ]]; then
     cat > "$CONF_FILE" <<'EOF'
-# rdrive.conf (exemplo)
-# Linhas KEY=VALUE são globais (opcionais).
-# Linhas REMOTE são obrigatórias e definem:
-#   REMOTE "remote_rclone","root_folder_or_empty","mount_point_in_~/rdrive","path_to_credentials.json"
+# rdrive.conf (created by rdrive-gui.sh)
+# Allowed lines:
+#   KEY=VALUE
+#   REMOTE "remote_rclone","root_folder_or_empty","mount_subdir","path_to_credentials.json"
 
-MOUNT_BASE=~/rdrive
-CACHE_DIR=~/.cache/rdrive-rclone
-LOG_DIR=~/.cache/rdrive-logs
+MOUNT_BASE=$HOME/rdrive
+CACHE_DIR=$HOME/.cache/rdrive-rclone
+LOG_DIR=$HOME/.cache/rdrive-logs
 
 VFS_CACHE_MODE=full
 VFS_CACHE_MAX_SIZE=2G
@@ -674,11 +674,10 @@ BUFFER_SIZE=64M
 DIR_CACHE_TIME=72h
 POLL_INTERVAL=1m
 UMASK=002
+EXPORT_FORMATS=link.html
 
-# Exemplos (ajuste paths e nomes):
-REMOTE "UFAM","","ufam","~/.config/rdrive/credentials-ufam.json"
-REMOTE "Super","","super","~/.config/rdrive/credentials-super.json"
-REMOTE "EspacoLam","","espacolam","~/.config/rdrive/credentials-lam.json"
+REMOTE "Work","","Work","$HOME/.config/rdrive/credentials-work.json"
+REMOTE "Personal","","Personal","$HOME/.config/rdrive/credentials-personal.json"
 EOF
     chmod 600 "$CONF_FILE"
     echo "criado: $CONF_FILE"

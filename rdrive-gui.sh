@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+
+# RDrive GUI
+#
+# Interactive Zenity assistant to manage RDrive configuration.
+#
+# Responsibilities:
+# - Create/reset ~/.config/rdrive/rdrive.conf
+# - Edit global settings and remotes (CRUD)
+# - Run installation and OAuth refresh flows
+# - Uninstall scripts and optional config cleanup
+#
+# Entry point: main()
+
 set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +22,12 @@ INSTALL_SCRIPT="${SCRIPT_DIR}/rdrive-install.sh"
 
 BIN_MOUNT="${HOME}/.local/bin/rdrive-mount.sh"
 BIN_REFRESH="${HOME}/.local/bin/rdrive-refresh.sh"
+
+ZENITY_BIN="$(command -v zenity || true)"
+GUI_ICON="${RDRIVE_GUI_ICON:-${SCRIPT_DIR}/rdrive-gui-icon.svg}"
+if [[ ! -f "$GUI_ICON" ]]; then
+  GUI_ICON="drive-harddisk"
+fi
 
 LOG_DIR="${HOME}/.cache/rdrive-logs"
 RUN_LOG="${LOG_DIR}/rdrive-gui-$(date +%Y%m%d-%H%M%S).log"
@@ -32,6 +51,11 @@ KNOWN_KEYS=(
   UMASK
   EXPORT_FORMATS
 )
+
+zenity() {
+  [[ -n "$ZENITY_BIN" ]] || return 127
+  "$ZENITY_BIN" --window-icon="$GUI_ICON" "$@"
+}
 
 str_trim() {
   local s="$1"
@@ -135,7 +159,7 @@ config_write_embedded_example() {
   mkdir -p "$CONF_DIR"
 
   cat > "$CONF_FILE" <<'EOF'
-# rdrive.conf (gerado pelo rdrive-gui.sh)
+# rdrive.conf (created by rdrive-gui.sh)
 # Allowed lines:
 #   KEY=VALUE
 #   REMOTE "remote_rclone","root_folder_or_empty","mount_subdir","path_to_credentials.json"
@@ -153,9 +177,8 @@ POLL_INTERVAL=1m
 UMASK=002
 EXPORT_FORMATS=link.html
 
-REMOTE "UFAM","","UFAM","$HOME/.config/rdrive/credentials-ufam.json"
-REMOTE "Pessoal","","Pessoal","$HOME/.config/rdrive/credentials-person.json"
-REMOTE "EspacoLam","","EspacoLam","$HOME/.config/rdrive/credentials-lam.json"
+REMOTE "Work","","Work","$HOME/.config/rdrive/credentials-work.json"
+REMOTE "Personal","","Personal","$HOME/.config/rdrive/credentials-personal.json"
 EOF
 
   chmod 600 "$CONF_FILE" 2>/dev/null || true
@@ -980,7 +1003,7 @@ main_menu_loop() {
 }
 
 system_check_prerequisites() {
-  command -v zenity >/dev/null 2>&1 || {
+  [[ -n "$ZENITY_BIN" && -x "$ZENITY_BIN" ]] || {
     echo "erro: zenity não encontrado." >&2
     exit 1
   }
