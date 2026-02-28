@@ -52,13 +52,14 @@ Current GUI flow:
    - View current file
    - Edit settings
    - Install scripts
-   - Install remotes
+   - Refresh remote (OAuth) — per-remote authorization with browser-profile guidance
+   - Uninstall scripts — with optional config removal and unmount
 3. Settings menu:
    - Global variables
-   - Remotes
+   - Remotes (CRUD with loop)
    - Revert changes from the current edit menu
-4. Script installation with log view at the end
-5. Selected remote authorization with browser-profile guidance
+4. Script installation runs in interactive terminal (visible output)
+5. OAuth refresh runs in interactive terminal (opens browser per remote)
 
 ### Path rules in GUI
 
@@ -157,6 +158,34 @@ Unmount:
 
 ```bash
 rdrive-umount.sh -all
+```
+
+## Uninstallation
+
+Use the GUI to uninstall:
+
+```bash
+./rdrive-gui.sh
+```
+
+Select "Uninstall scripts" from the main menu. The flow:
+
+1. Confirmation prompt
+2. Optional: unmount all remotes before uninstalling
+3. Optional: remove configuration file (`~/.config/rdrive/rdrive.conf`)
+4. Removal of:
+   - `~/.local/lib/rdrive/`
+   - `~/.local/bin/rdrive-*.sh` (symlinks)
+   - `~/.config/autostart/rdrive.desktop`
+
+Manual uninstall:
+
+```bash
+fusermount3 -u ~/rdrive/*  # unmount all
+rm -rf ~/.local/lib/rdrive
+rm -f ~/.local/bin/rdrive-*.sh
+rm -f ~/.config/autostart/rdrive.desktop
+rm -f ~/.config/rdrive/rdrive.conf  # optional
 ```
 
 ## License

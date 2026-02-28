@@ -1,12 +1,12 @@
 # RDrive — Remote Drive para Linux
 
-RDrive é uma ferramenta em shell script para montar remotes (como Google Drive) em diretórios locais no Linux usando rclone.
+RDrive é uma ferramenta em shell script para montar remotes na nuvem (como Google Drive) em diretórios locais do Linux usando rclone.
 
 ## Visão geral
 
 - Funciona em distribuições Linux modernas
 - Compatível com desktops XDG (XFCE, KDE, GNOME e similares)
-- Configuração declarativa em arquivo (`rdrive.conf`)
+- Configuração declarativa baseada em arquivo (`rdrive.conf`)
 - Suporte a múltiplos remotes
 - Autorização OAuth manual por remote
 - Inicialização automática via XDG Autostart
@@ -18,9 +18,9 @@ RDrive é uma ferramenta em shell script para montar remotes (como Google Drive)
 - `rclone`
 - `zenity` (GUI)
 - FUSE (`fusermount` ou `fusermount3`)
-- `python3` (extração de dados de credenciais no instalador)
+- `python3` (extração de metadados de credenciais no instalador)
 
-> Observação: neste momento o instalador automático de dependências usa `apt`.
+> Nota: neste estágio, a instalação automática de dependências é implementada com `apt`.
 
 ## Instalação
 
@@ -32,7 +32,7 @@ chmod +x rdrive-install.sh
 O instalador:
 
 1. Verifica/instala dependências
-2. Garante `~/.config/rdrive/rdrive.conf`
+2. Garante a existência de `~/.config/rdrive/rdrive.conf`
 3. Gera `~/.config/rclone/rclone.conf`
 4. Instala scripts auxiliares em `~/.local/lib/rdrive`
 5. Cria links em `~/.local/bin`
@@ -47,33 +47,34 @@ chmod +x rdrive-gui.sh
 
 Fluxo atual da GUI:
 
-1. Boas-vindas e escolha inicial (carregar configuração atual ou resetar configuração padrão)
+1. Boas-vindas e escolha inicial (carregar config atual ou resetar para padrão)
 2. Menu principal:
    - Visualizar arquivo atual
    - Editar configurações
    - Instalar scripts
-   - Instalar remotes
-3. Edição de configurações:
+   - Refresh de remote (OAuth) — autorização por remote com orientação de perfil de navegador
+   - Desinstalar scripts — com remoção opcional de config e desmontagem
+3. Menu de configurações:
    - Variáveis globais
-   - Remotes
-   - Reverter alterações do menu de edição
-4. Instalação de scripts com exibição de log ao final
-5. Autorização de remote selecionado com orientação de perfil do navegador
+   - Remotes (CRUD em loop)
+   - Reverter alterações do menu de edição atual
+4. Instalação de scripts executada em terminal interativo (saída visível)
+5. Refresh OAuth executado em terminal interativo (abre navegador por remote)
 
-### Regras de caminho na GUI
+### Regras de caminhos na GUI
 
-- `MOUNT_BASE` é normalizado para caminho absoluto no runtime
-- Pasta de montagem do remote é tratada como string (subcaminho dentro de `MOUNT_BASE`)
-- Credencial é tratada como caminho absoluto
-- O arquivo de credencial deve existir e ser legível
+- `MOUNT_BASE` é normalizado para um caminho absoluto em runtime
+- Pasta de montagem do remote é tratada como string de subcaminho dentro de `MOUNT_BASE`
+- Caminho de credencial é tratado como absoluto
+- Arquivo de credencial deve existir e ser legível
 
 ## `--allow-other` (FUSE)
 
-O mount usa `--allow-other` por necessidade funcional (por exemplo, permitir que aplicações como o navegador salvem diretamente nas pastas montadas).
+A montagem usa `--allow-other` por design (por exemplo, para permitir que aplicações como navegadores salvem diretamente em pastas montadas).
 
-O instalador garante `user_allow_other` em `/etc/fuse.conf`.
+O instalador garante que `user_allow_other` esteja habilitado em `/etc/fuse.conf`.
 
-## Estrutura de diretórios
+## Layout de diretórios
 
 ```text
 ~/.config/
@@ -100,9 +101,9 @@ O instalador garante `user_allow_other` em `/etc/fuse.conf`.
      └─ rdrive-refresh.sh
 ```
 
-## Formato do rdrive.conf
+## Formato de `rdrive.conf`
 
-Arquivo:
+Arquivo principal:
 
 ```text
 ~/.config/rdrive/rdrive.conf
@@ -127,7 +128,7 @@ EXPORT_FORMATS=link.html
 REMOTE "UFAM","","UFAM","/home/user/.Private/credentials-ufam.json"
 ```
 
-Se `~/.config/rdrive/rdrive.conf` não existir, o instalador cria um modelo padrão embutido.
+Se `~/.config/rdrive/rdrive.conf` não existir, o instalador cria um template padrão embutido.
 
 Formato REMOTE:
 
@@ -137,7 +138,7 @@ REMOTE "remote_rclone","root_folder_or_empty","mount_subdir","path_to_credential
 
 ## Uso
 
-Autorizar/renovar OAuth:
+Autorizar/atualizar OAuth:
 
 ```bash
 rdrive-refresh.sh -all
@@ -159,6 +160,34 @@ Desmontar:
 rdrive-umount.sh -all
 ```
 
+## Desinstalação
+
+Use a GUI para desinstalar:
+
+```bash
+./rdrive-gui.sh
+```
+
+Selecione "Desinstalar scripts" no menu principal. O fluxo:
+
+1. Prompt de confirmação
+2. Opcional: desmontar todos os remotes antes de desinstalar
+3. Opcional: remover arquivo de configuração (`~/.config/rdrive/rdrive.conf`)
+4. Remoção de:
+   - `~/.local/lib/rdrive/`
+   - `~/.local/bin/rdrive-*.sh` (links simbólicos)
+   - `~/.config/autostart/rdrive.desktop`
+
+Desinstalação manual:
+
+```bash
+fusermount3 -u ~/rdrive/*  # desmontar tudo
+rm -rf ~/.local/lib/rdrive
+rm -f ~/.local/bin/rdrive-*.sh
+rm -f ~/.config/autostart/rdrive.desktop
+rm -f ~/.config/rdrive/rdrive.conf  # opcional
+```
+
 ## Licença
 
-Consulte `LICENSE.md`.
+Veja `LICENSE.md`.
