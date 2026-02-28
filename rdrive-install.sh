@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
 # rdrive-install.sh
 # RDrive (remote drive) - installer + generator for Google Drive mounts using rclone
 #
@@ -36,6 +39,13 @@ BIN_DIR="${HOME}/.local/bin"
 
 AUTOSTART_DIR="${HOME}/.config/autostart"
 AUTOSTART_DESKTOP="${AUTOSTART_DIR}/rdrive-mount.desktop"
+
+ICON_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
+ICON_FILE="${ICON_DIR}/rdrive.svg"
+ICON_SOURCE="${SCRIPT_DIR}/rdrive-gui-icon.svg"
+
+APPLICATIONS_DIR="${HOME}/.local/share/applications"
+GUI_DESKTOP="${APPLICATIONS_DIR}/rdrive-gui.desktop"
 
 die() { echo "erro: $*" >&2; exit 1; }
 
@@ -301,8 +311,38 @@ write_rclone_conf() {
 
 # --------- write user scripts ----------
 write_user_scripts() {
-  echo "[3/4] instalando scripts rdrive..."
+  echo "[3/5] instalando scripts rdrive..."
   mkdir -p "$LIB_DIR" "$BIN_DIR"
+
+  copy_if_needed() {
+    local src="$1"
+    local dst="$2"
+
+    local src_real dst_real
+    src_real="$(realpath -m "$src")"
+    dst_real="$(realpath -m "$dst")"
+
+    if [[ "$src_real" == "$dst_real" ]]; then
+      return 0
+    fi
+
+    cp -f "$src" "$dst"
+  }
+
+  local gui_src="${SCRIPT_DIR}/rdrive-gui.sh"
+  local install_src="${SCRIPT_DIR}/rdrive-install.sh"
+  local icon_src="${SCRIPT_DIR}/rdrive-gui-icon.svg"
+
+  [[ -f "$gui_src" ]] || die "arquivo não encontrado: $gui_src"
+  [[ -f "$install_src" ]] || die "arquivo não encontrado: $install_src"
+
+  copy_if_needed "$gui_src" "${LIB_DIR}/rdrive-gui.sh"
+  copy_if_needed "$install_src" "${LIB_DIR}/rdrive-install.sh"
+  chmod +x "${LIB_DIR}/rdrive-gui.sh" "${LIB_DIR}/rdrive-install.sh"
+
+  if [[ -f "$icon_src" ]]; then
+    copy_if_needed "$icon_src" "${LIB_DIR}/rdrive-gui-icon.svg"
+  fi
 
   # Common parser + helpers embedded into each script (no extra files)
   common_block='
@@ -629,14 +669,50 @@ EOS
   ln -sf "${LIB_DIR}/rdrive-mount.sh"   "${BIN_DIR}/rdrive-mount.sh"
   ln -sf "${LIB_DIR}/rdrive-umount.sh"  "${BIN_DIR}/rdrive-umount.sh"
   ln -sf "${LIB_DIR}/rdrive-refresh.sh" "${BIN_DIR}/rdrive-refresh.sh"
+  ln -sf "${LIB_DIR}/rdrive-gui.sh"     "${BIN_DIR}/rdrive-gui.sh"
+  ln -sf "${LIB_DIR}/rdrive-install.sh" "${BIN_DIR}/rdrive-install.sh"
 
   echo "ok: scripts em ${LIB_DIR} e links em ${BIN_DIR}"
 }
 
 # --------- create/update XDG autostart ----------
+install_desktop_assets() {
+  echo "[4/5] instalando ícone e atalho da GUI..."
+
+  mkdir -p "$ICON_DIR" "$APPLICATIONS_DIR"
+
+  local icon_value="drive-harddisk"
+  if [[ -f "$ICON_SOURCE" ]]; then
+    cp -f "$ICON_SOURCE" "$ICON_FILE"
+    icon_value="$ICON_FILE"
+    echo "ok: ícone em $ICON_FILE"
+  else
+    echo "aviso: ícone customizado não encontrado em $ICON_SOURCE; usando ícone do tema"
+  fi
+
+  cat > "$GUI_DESKTOP" <<EOF
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=RDrive GUI
+Comment=Configure and manage RDrive
+Exec=${BIN_DIR}/rdrive-gui.sh
+Icon=${icon_value}
+Terminal=false
+StartupNotify=true
+Categories=Utility;Network;FileTools;
+EOF
+
+  chmod 644 "$GUI_DESKTOP"
+  echo "ok: $GUI_DESKTOP"
+}
+
 install_autostart() {
-  echo "[4/4] configurando autostart (xdg)..."
+  echo "[5/5] configurando autostart (xdg)..."
   mkdir -p "$AUTOSTART_DIR"
+
+  local icon_value="drive-harddisk"
+  [[ -f "$ICON_FILE" ]] && icon_value="$ICON_FILE"
 
   # Ensure ~/.local/bin is in PATH for desktop sessions, but call absolute path anyway.
   cat > "$AUTOSTART_DESKTOP" <<EOF
@@ -646,6 +722,7 @@ Version=1.0
 Name=RDrive Mount
 Comment=Mount RDrive remotes at login
 Exec=${BIN_DIR}/rdrive-mount.sh -all
+Icon=${icon_value}
 Terminal=false
 X-GNOME-Autostart-enabled=true
 EOF
@@ -704,6 +781,9 @@ Pronto.
 5) Desmonte:
    rdrive-umount.sh -all
 
+6) GUI:
+  rdrive-gui.sh
+
 Autostart XDG configurado em:
   $AUTOSTART_DESKTOP
 
@@ -717,6 +797,7 @@ main() {
   ensure_fuse_allow_other
   write_rclone_conf
   write_user_scripts
+  install_desktop_assets
   install_autostart
   print_next_steps
 }

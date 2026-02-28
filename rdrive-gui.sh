@@ -354,28 +354,6 @@ ui_show_config_file() {
 }
 
 show_welcome_flow() {
-  zenity --question \
-    --title="Bem-vindo" \
-    --ok-label="OK" \
-    --cancel-label="Cancelar" \
-    --width=720 \
-    --text="Bem-vindo ao RDrive GUI.\n\nEste assistente ajuda a configurar o arquivo:\n$CONF_FILE\n\nDepois da configuração, você poderá instalar scripts e autorizar remotes." >/dev/null 2>&1 || exit 0
-
-  local choice
-  choice="$(zenity --list --radiolist \
-    --title="Como iniciar" \
-    --ok-label="OK" \
-    --cancel-label="Cancelar" \
-    --width=760 --height=320 \
-    --text="Escolha uma opção inicial:" \
-    --column="" --column="Opção" \
-    TRUE "Carregar configuração existente" \
-    FALSE "Resetar configuração padrão" 2>/dev/null)" || exit 0
-
-  if [[ "$choice" == "Resetar configuração padrão" ]]; then
-    config_write_embedded_example
-  fi
-
   config_load "$CONF_FILE" || {
     ui_error "Falha ao carregar configuração."
     exit 1
@@ -867,7 +845,7 @@ uninstall_scripts_flow() {
     --ok-label="Desinstalar" \
     --cancel-label="Cancelar" \
     --width=720 \
-    --text="Desinstalar scripts do RDrive?\n\nSerão removidos:\n- Scripts em ~/.local/lib/rdrive/\n- Links em ~/.local/bin/\n- Autostart em ~/.config/autostart/\n\nO arquivo de configuração pode ser removido opcionalmente." >/dev/null 2>&1 || return 0
+    --text="Desinstalar scripts do RDrive?\n\nSerão removidos:\n- Scripts em ~/.local/lib/rdrive/\n- Links em ~/.local/bin/\n- Autostart em ~/.config/autostart/\n- Atalho da GUI em ~/.local/share/applications/\n- Ícone em ~/.local/share/icons/\n\nO arquivo de configuração pode ser removido opcionalmente." >/dev/null 2>&1 || return 0
 
   local unmount_first="no"
   if [[ -x "$BIN_MOUNT" ]]; then
@@ -925,10 +903,26 @@ uninstall_scripts_flow() {
   if [[ -L "${HOME}/.local/bin/rdrive-umount.sh" ]]; then
     rm -f "${HOME}/.local/bin/rdrive-umount.sh" && result+="  ✓ ~/.local/bin/rdrive-umount.sh\n" || result+="  ✗ Falha\n"
   fi
+  if [[ -L "${HOME}/.local/bin/rdrive-gui.sh" ]]; then
+    rm -f "${HOME}/.local/bin/rdrive-gui.sh" && result+="  ✓ ~/.local/bin/rdrive-gui.sh\n" || result+="  ✗ Falha\n"
+  fi
+  if [[ -L "${HOME}/.local/bin/rdrive-install.sh" ]]; then
+    rm -f "${HOME}/.local/bin/rdrive-install.sh" && result+="  ✓ ~/.local/bin/rdrive-install.sh\n" || result+="  ✗ Falha\n"
+  fi
 
-  local autostart_file="${HOME}/.config/autostart/rdrive.desktop"
+  local autostart_file="${HOME}/.config/autostart/rdrive-mount.desktop"
   if [[ -f "$autostart_file" ]]; then
     rm -f "$autostart_file" && result+="  ✓ $autostart_file\n" || result+="  ✗ Falha ao remover autostart\n"
+  fi
+
+  local gui_desktop_file="${HOME}/.local/share/applications/rdrive-gui.desktop"
+  if [[ -f "$gui_desktop_file" ]]; then
+    rm -f "$gui_desktop_file" && result+="  ✓ $gui_desktop_file\n" || result+="  ✗ Falha ao remover atalho da GUI\n"
+  fi
+
+  local icon_file="${HOME}/.local/share/icons/hicolor/scalable/apps/rdrive.svg"
+  if [[ -f "$icon_file" ]]; then
+    rm -f "$icon_file" && result+="  ✓ $icon_file\n" || result+="  ✗ Falha ao remover ícone\n"
   fi
 
   result+="\n"
@@ -967,18 +961,62 @@ main_menu_loop() {
       --title="Menu principal" \
       --ok-label="OK" \
       --cancel-label="Fechar" \
-      --width=860 --height=440 \
-      --text="Escolha uma ação:" \
+      --width=820 --height=660 \
+      --text="Bem-vindo ao RDrive GUI.\n\nArquivo de configuração:\n$CONF_FILE\n\nEscolha uma ação:" \
       --column="Opção" \
+      "──────── Configuração ────────" \
+      "Recarregar configuração do arquivo" \
+      "Resetar configuração para padrão" \
+      "──────── Edição ──────────────" \
       "Visualizar arquivo atual" \
       "Editar configurações" \
+      "──────── Operações ───────────" \
       "Instalar scripts" \
       "$refresh_label" \
       "$uninstall_label" 2>/dev/null)" || break
 
     case "$action" in
+      "──────── Configuração ────────"|"──────── Edição ──────────────"|"──────── Operações ───────────")
+        continue
+        ;;
       "Visualizar arquivo atual")
         ui_show_config_file
+        ;;
+      "Recarregar configuração do arquivo")
+        zenity --question \
+          --title="Recarregar configuração" \
+          --ok-label="Recarregar" \
+          --cancel-label="Cancelar" \
+          --width=720 \
+          --text="Esta ação descarta alterações em memória e recarrega o arquivo do disco.\n\nDeseja continuar?" >/dev/null 2>&1 || continue
+
+        if config_load "$CONF_FILE"; then
+          ui_info "Configuração recarregada com sucesso."
+        else
+          ui_error "Falha ao recarregar configuração do arquivo."
+        fi
+        ;;
+      "Resetar configuração para padrão")
+        zenity --question \
+          --title="Resetar configuração" \
+          --ok-label="Continuar" \
+          --cancel-label="Cancelar" \
+          --width=720 \
+          --text="Esta ação vai sobrescrever o arquivo atual com os valores padrão.\n\nDeseja continuar?" >/dev/null 2>&1 || continue
+
+        zenity --question \
+          --title="Confirmação final" \
+          --ok-label="Resetar" \
+          --cancel-label="Cancelar" \
+          --width=720 \
+          --text="Confirma resetar agora? Alterações atuais serão perdidas." >/dev/null 2>&1 || continue
+
+        config_write_embedded_example
+        if config_load "$CONF_FILE"; then
+          ui_info "Configuração resetada para o padrão."
+        else
+          ui_error "Arquivo padrão foi gerado, mas falhou ao recarregar."
+        fi
         ;;
       "Editar configurações")
         edit_config_menu
