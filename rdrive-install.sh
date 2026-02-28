@@ -319,6 +319,12 @@ path_expand(){
   local p="$1"
   p="$(trim "$p")"
 
+  if [[ "$p" == \"*\" && "$p" == *\" ]]; then
+    p="${p:1:${#p}-2}"
+  fi
+
+  p="$(trim "$p")"
+
   if [[ "$p" == "~" ]]; then
     printf "%s" "$HOME"
     return
