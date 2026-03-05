@@ -77,7 +77,7 @@ path_expand() {
     return
   fi
   if [[ "$p" == "~/"* ]]; then
-    printf '%s' "${HOME}/${p#~/}"
+    printf '%s' "${HOME}/${p#\~/}"
     return
   fi
   if [[ "$p" == '$HOME' ]]; then
@@ -117,9 +117,9 @@ sudo_run() {
     return
   fi
 
-  if [[ ! -t 0 ]] && command -v zenity >/dev/null 2>&1; then
+  if [[ ! -t 0 ]] && command -v yad >/dev/null 2>&1; then
     local sudo_pass
-    sudo_pass="$(zenity --password \
+    sudo_pass="$(yad --password \
       --title="RDrive - senha administrativa" \
       --width=420 \
       --text="Digite a senha de administrador para concluir a instalação." 2>/dev/null)" || die "operação cancelada: senha administrativa não informada"
@@ -166,7 +166,7 @@ load_rdrive_conf() {
       local cred_path
       cred_path="$(path_expand "${BASH_REMATCH[4]}")"
       if [[ "$cred_path" == "~/"* ]]; then
-        cred_path="${HOME}/${cred_path#~/}"
+        cred_path="${HOME}/${cred_path#\~/}"
       fi
       if [[ "$cred_path" == "$HOME/~/"* ]]; then
         cred_path="${HOME}/${cred_path#"$HOME/~/"}"
@@ -311,38 +311,8 @@ write_rclone_conf() {
 
 # --------- write user scripts ----------
 write_user_scripts() {
-  echo "[3/5] instalando scripts rdrive..."
+  echo "[3/4] instalando scripts de montagem RDrive..."
   mkdir -p "$LIB_DIR" "$BIN_DIR"
-
-  copy_if_needed() {
-    local src="$1"
-    local dst="$2"
-
-    local src_real dst_real
-    src_real="$(realpath -m "$src")"
-    dst_real="$(realpath -m "$dst")"
-
-    if [[ "$src_real" == "$dst_real" ]]; then
-      return 0
-    fi
-
-    cp -f "$src" "$dst"
-  }
-
-  local gui_src="${SCRIPT_DIR}/rdrive-gui.sh"
-  local install_src="${SCRIPT_DIR}/rdrive-install.sh"
-  local icon_src="${SCRIPT_DIR}/rdrive-gui-icon.svg"
-
-  [[ -f "$gui_src" ]] || die "arquivo não encontrado: $gui_src"
-  [[ -f "$install_src" ]] || die "arquivo não encontrado: $install_src"
-
-  copy_if_needed "$gui_src" "${LIB_DIR}/rdrive-gui.sh"
-  copy_if_needed "$install_src" "${LIB_DIR}/rdrive-install.sh"
-  chmod +x "${LIB_DIR}/rdrive-gui.sh" "${LIB_DIR}/rdrive-install.sh"
-
-  if [[ -f "$icon_src" ]]; then
-    copy_if_needed "$icon_src" "${LIB_DIR}/rdrive-gui-icon.svg"
-  fi
 
   # Common parser + helpers embedded into each script (no extra files)
   common_block='
@@ -374,7 +344,7 @@ path_expand(){
     return
   fi
   if [[ "$p" == "~/"* ]]; then
-    printf "%s" "${HOME}/${p#~/}"
+    printf "%s" "${HOME}/${p#\~/}"
     return
   fi
   if [[ "$p" == "$HOME" ]]; then
@@ -444,7 +414,7 @@ load_rdrive_conf() {
       local cred_path
       cred_path="$(path_expand "${BASH_REMATCH[4]}")"
       if [[ "$cred_path" == "~/"* ]]; then
-        cred_path="${HOME}/${cred_path#~/}"
+        cred_path="${HOME}/${cred_path#\~/}"
       fi
       if [[ "$cred_path" == "$HOME/~/"* ]]; then
         cred_path="${HOME}/${cred_path#"$HOME/~/"}"
@@ -669,43 +639,10 @@ EOS
   ln -sf "${LIB_DIR}/rdrive-mount.sh"   "${BIN_DIR}/rdrive-mount.sh"
   ln -sf "${LIB_DIR}/rdrive-umount.sh"  "${BIN_DIR}/rdrive-umount.sh"
   ln -sf "${LIB_DIR}/rdrive-refresh.sh" "${BIN_DIR}/rdrive-refresh.sh"
-  ln -sf "${LIB_DIR}/rdrive-gui.sh"     "${BIN_DIR}/rdrive-gui.sh"
-  ln -sf "${LIB_DIR}/rdrive-install.sh" "${BIN_DIR}/rdrive-install.sh"
 
   echo "ok: scripts em ${LIB_DIR} e links em ${BIN_DIR}"
 }
 
-# --------- create/update XDG autostart ----------
-install_desktop_assets() {
-  echo "[4/5] instalando ícone e atalho da GUI..."
-
-  mkdir -p "$ICON_DIR" "$APPLICATIONS_DIR"
-
-  local icon_value="drive-harddisk"
-  if [[ -f "$ICON_SOURCE" ]]; then
-    cp -f "$ICON_SOURCE" "$ICON_FILE"
-    icon_value="$ICON_FILE"
-    echo "ok: ícone em $ICON_FILE"
-  else
-    echo "aviso: ícone customizado não encontrado em $ICON_SOURCE; usando ícone do tema"
-  fi
-
-  cat > "$GUI_DESKTOP" <<EOF
-[Desktop Entry]
-Type=Application
-Version=1.0
-Name=RDrive GUI
-Comment=Configure and manage RDrive
-Exec=${BIN_DIR}/rdrive-gui.sh
-Icon=${icon_value}
-Terminal=false
-StartupNotify=true
-Categories=Utility;Network;FileTools;
-EOF
-
-  chmod 644 "$GUI_DESKTOP"
-  echo "ok: $GUI_DESKTOP"
-}
 
 install_autostart() {
   echo "[5/5] configurando autostart (xdg)..."
@@ -797,7 +734,7 @@ main() {
   ensure_fuse_allow_other
   write_rclone_conf
   write_user_scripts
-  install_desktop_assets
+  
   install_autostart
   print_next_steps
 }

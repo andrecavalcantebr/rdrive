@@ -16,33 +16,53 @@ RDrive é uma ferramenta em shell script para montar remotes na nuvem (como Goog
 - Linux
 - `bash`
 - `rclone`
-- `zenity` (GUI)
+- `yad` (GUI)
+- `jq`
 - FUSE (`fusermount` ou `fusermount3`)
-- `python3` (extração de metadados de credenciais no instalador)
-
-> Nota: neste estágio, a instalação automática de dependências é implementada com `apt`.
+- `python3` (extração de metadados de credenciais)
 
 ## Instalação
 
+Você pode instalar o RDrive de forma global para o seu usuário rodando o script de instalação pelo Tarball da Release do GitHub:
+
 ```bash
-chmod +x rdrive-install.sh
-./rdrive-install.sh
+wget -qO- https://github.com/andrecavalcantebr/rdrive/archive/refs/tags/vX.Y.tar.gz | tar xz -C /tmp && /tmp/rdrive/install.sh
+```
+
+Ou, caso tenha clonado o repositório localmente:
+
+```bash
+./install.sh --install
 ```
 
 O instalador:
 
-1. Verifica/instala dependências
-2. Garante a existência de `~/.config/rdrive/rdrive.conf`
-3. Gera `~/.config/rclone/rclone.conf`
-4. Instala scripts auxiliares em `~/.local/lib/rdrive`
-5. Cria links em `~/.local/bin`
-6. Configura autostart em `~/.config/autostart`
+1. Verifica dependências (usando `apt-get` ou `dnf` se necessário).
+2. Copia os binários (`rdrive`, `rdrive-gui`) para `~/.local/bin/`.
+3. Copia assets de atalho (`rdrive.desktop`, icons) para suas pastas XDG (`~/.local/share/applications`, `~/.local/share/icons`).
+4. Atualiza o banco de dados do desktop environment.
+
+## Geração do Setup
+
+Primeiro inicie o motor via linha de comando para gerar as ferramentas auxiliares:
+
+```bash
+rdrive
+```
+
+Ele irá:
+1. Garantir a existência de `~/.config/rdrive/rdrive.conf`.
+2. Gerar o `~/.config/rclone/rclone.conf`.
+3. Instalar scripts auxiliares em `~/.local/lib/rdrive`.
+4. Criar links executáveis em `~/.local/bin` (`rdrive-mount.sh`, etc.).
+5. Configurar o autostart em `~/.config/autostart`.
 
 ## GUI de configuração
 
+Inicie pelo menu de aplicativos ou pelo terminal com o comando:
+
 ```bash
-chmod +x rdrive-gui.sh
-./rdrive-gui.sh
+rdrive-gui
 ```
 
 Fluxo atual da GUI:
@@ -51,7 +71,7 @@ Fluxo atual da GUI:
 2. Menu principal:
    - Visualizar arquivo atual
    - Editar configurações
-   - Instalar scripts
+   - Instalar scripts (reexecuta o `rdrive`)
    - Refresh de remote (OAuth) — autorização por remote com orientação de perfil de navegador
    - Desinstalar scripts — com remoção opcional de config e desmontagem
 3. Menu de configurações:
@@ -71,8 +91,7 @@ Fluxo atual da GUI:
 ## `--allow-other` (FUSE)
 
 A montagem usa `--allow-other` por design (por exemplo, para permitir que aplicações como navegadores salvem diretamente em pastas montadas).
-
-O instalador garante que `user_allow_other` esteja habilitado em `/etc/fuse.conf`.
+Durante a primeira execução o script `rdrive` pode requerer permissão para garantir que `user_allow_other` esteja habilitado em `/etc/fuse.conf`.
 
 ## Layout de diretórios
 
@@ -90,12 +109,19 @@ O instalador garante que `user_allow_other` esteja habilitado em `/etc/fuse.conf
  └─ rdrive-logs/
 
 ~/.local/
+ ├─ share/
+ │   ├─ applications/
+ │   │   └─ rdrive.desktop
+ │   └─ icons/hicolor/scalable/apps/
+ │       └─ rdrive-gui-icon.svg
  ├─ lib/
  │   └─ rdrive/
  │       ├─ rdrive-mount.sh
  │       ├─ rdrive-umount.sh
  │       └─ rdrive-refresh.sh
  └─ bin/
+     ├─ rdrive
+     ├─ rdrive-gui
      ├─ rdrive-mount.sh
      ├─ rdrive-umount.sh
      └─ rdrive-refresh.sh
@@ -128,7 +154,7 @@ EXPORT_FORMATS=link.html
 REMOTE "UFAM","","UFAM","/home/user/.Private/credentials-ufam.json"
 ```
 
-Se `~/.config/rdrive/rdrive.conf` não existir, o instalador cria um template padrão embutido.
+Se `~/.config/rdrive/rdrive.conf` não existir, o motor `rdrive` cria um template padrão embutido.
 
 Formato REMOTE:
 
@@ -162,10 +188,16 @@ rdrive-umount.sh -all
 
 ## Desinstalação
 
-Use a GUI para desinstalar:
+Realize a limpeza no nível do pacote desinstalando pelo terminal:
 
 ```bash
-./rdrive-gui.sh
+./install.sh --uninstall
+```
+
+Para remover configurações e scripts gerados, você pode usar a interface yad:
+
+```bash
+rdrive-gui
 ```
 
 Selecione "Desinstalar scripts" no menu principal. O fluxo:
@@ -182,6 +214,7 @@ Desinstalação manual:
 
 ```bash
 fusermount3 -u ~/rdrive/*  # desmontar tudo
+./install.sh --uninstall   # apaga wrappers rdrive e rdrive-gui
 rm -rf ~/.local/lib/rdrive
 rm -f ~/.local/bin/rdrive-*.sh
 rm -f ~/.config/autostart/rdrive.desktop

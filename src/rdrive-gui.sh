@@ -18,16 +18,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CONF_DIR="${HOME}/.config/rdrive"
 CONF_FILE="${CONF_DIR}/rdrive.conf"
-INSTALL_SCRIPT="${SCRIPT_DIR}/rdrive-install.sh"
+INSTALL_SCRIPT="${HOME}/.local/bin/rdrive"
 
 BIN_MOUNT="${HOME}/.local/bin/rdrive-mount.sh"
 BIN_REFRESH="${HOME}/.local/bin/rdrive-refresh.sh"
 
-ZENITY_BIN="$(command -v zenity || true)"
+YAD_BIN="$(command -v yad || true)"
 GUI_ICON="${RDRIVE_GUI_ICON:-${SCRIPT_DIR}/rdrive-gui-icon.svg}"
 if [[ ! -f "$GUI_ICON" ]]; then
   GUI_ICON="drive-harddisk"
 fi
+YAD_OPTS=("--window-icon=$GUI_ICON" "--center" "--borders=20")
 
 LOG_DIR="${HOME}/.cache/rdrive-logs"
 RUN_LOG="${LOG_DIR}/rdrive-gui-$(date +%Y%m%d-%H%M%S).log"
@@ -52,10 +53,7 @@ KNOWN_KEYS=(
   EXPORT_FORMATS
 )
 
-zenity() {
-  [[ -n "$ZENITY_BIN" ]] || return 127
-  "$ZENITY_BIN" --window-icon="$GUI_ICON" "$@"
-}
+
 
 str_trim() {
   local s="$1"
@@ -121,15 +119,15 @@ config_normalize_runtime_paths() {
 }
 
 ui_error() {
-  zenity --error --title="RDrive GUI" --width=560 --text="$1" >/dev/null 2>&1 || true
+  yad "${YAD_OPTS[@]}" --error --button="Fechar:0" --title="RDrive GUI" --width=560 --text="$1" >/dev/null 2>&1 || true
 }
 
 ui_warning() {
-  zenity --warning --title="RDrive GUI" --width=560 --text="$1" >/dev/null 2>&1 || true
+  yad "${YAD_OPTS[@]}" --warning --button="Fechar:0" --title="RDrive GUI" --width=560 --text="$1" >/dev/null 2>&1 || true
 }
 
 ui_info() {
-  zenity --info --title="RDrive GUI" --width=560 --text="$1" >/dev/null 2>&1 || true
+  yad "${YAD_OPTS[@]}" --info --button="Fechar:0" --title="RDrive GUI" --width=560 --text="$1" >/dev/null 2>&1 || true
 }
 
 config_is_known_key() {
@@ -345,11 +343,11 @@ system_scripts_installed() {
 }
 
 ui_show_config_file() {
-  zenity --text-info \
+  yad "${YAD_OPTS[@]}" --text-info \
     --title="Visualização do arquivo" \
-    --ok-label="Fechar" \
-    --width=980 \
-    --height=720 \
+    --button="Fechar:0" \
+    --width=800 \
+    --height=600 \
     --filename="$CONF_FILE" >/dev/null 2>&1 || true
 }
 
@@ -366,10 +364,10 @@ edit_global_variable() {
   local current="$3"
 
   local new_value
-  new_value="$(zenity --entry \
+  new_value="$(yad "${YAD_OPTS[@]}" --entry \
     --title="Editar variável" \
-    --ok-label="OK" \
-    --cancel-label="Cancelar" \
+    --button="OK:0" \
+    --button="Cancelar:1" \
     --width=820 \
     --text="$help\n\n$key:" \
     --entry-text="$current" 2>/dev/null)" || return 1
@@ -381,11 +379,11 @@ edit_global_variable() {
 edit_global_settings_menu() {
   while true; do
     local action
-    action="$(zenity --list \
+    action="$(yad "${YAD_OPTS[@]}" --list --print-column=1 --separator="" \
       --title="Variáveis globais" \
-      --ok-label="OK" \
-      --cancel-label="Voltar" \
-      --width=980 --height=560 \
+      --button="OK:0" \
+      --button="Voltar:1" \
+      --width=800 --height=560 \
       --text="Descrição/Ajuda e valor atual. Selecione uma variável para editar." \
       --column="Variável" --column="Valor Atual" --column="Ajuda" \
       "MOUNT_BASE" "$MOUNT_BASE" "Pasta base de montagem (recomendado: ~/rdrive)" \
@@ -481,10 +479,10 @@ edit_single_remote() {
 
     local action
     if [[ "$is_new" -eq 1 ]]; then
-      action="$(zenity --list \
+      action="$(yad "${YAD_OPTS[@]}" --list --print-column=1 --separator="" \
         --title="Edição de remote" \
-        --ok-label="OK" \
-        --cancel-label="Cancelar" \
+        --button="OK:0" \
+        --button="Cancelar:1" \
         --width=920 --height=440 \
         --text="Selecione o campo para editar.\nPara pasta e arquivo, use o seletor padrão do sistema." \
         --column="Campo" --column="Valor" \
@@ -494,10 +492,10 @@ edit_single_remote() {
         "Arquivo de credencial" "$label_cred" \
         "Guardar" "Salvar este remote" 2>/dev/null)" || return 0
     else
-      action="$(zenity --list \
+      action="$(yad "${YAD_OPTS[@]}" --list --print-column=1 --separator="" \
         --title="Edição de remote" \
-        --ok-label="OK" \
-        --cancel-label="Cancelar" \
+        --button="OK:0" \
+        --button="Cancelar:1" \
         --width=920 --height=500 \
         --text="Selecione o campo para editar.\nPara pasta e arquivo, use o seletor padrão do sistema." \
         --column="Campo" --column="Valor" \
@@ -512,7 +510,7 @@ edit_single_remote() {
     case "$action" in
       "Nome do remote")
         local new_name
-        new_name="$(zenity --entry \
+        new_name="$(yad "${YAD_OPTS[@]}" --entry \
           --title="Nome do remote" \
           --text="Exemplo: UFAM" \
           --entry-text="$name" 2>/dev/null)" || continue
@@ -520,7 +518,7 @@ edit_single_remote() {
         ;;
       "Root folder ID")
         local new_root
-        new_root="$(zenity --entry \
+        new_root="$(yad "${YAD_OPTS[@]}" --entry \
           --title="Root folder ID" \
           --text="Opcional. Pode deixar vazio." \
           --entry-text="$root" 2>/dev/null)" || continue
@@ -528,7 +526,7 @@ edit_single_remote() {
         ;;
       "Pasta de montagem")
         local typed_mount
-        typed_mount="$(zenity --entry \
+        typed_mount="$(yad "${YAD_OPTS[@]}" --entry \
           --title="Pasta de montagem" \
           --width=900 \
           --text="Informe somente o nome/subcaminho da pasta dentro de $MOUNT_BASE\n(ex.: Teste ou projetos/2026)." \
@@ -540,7 +538,7 @@ edit_single_remote() {
       "Arquivo de credencial")
         local current_guess chosen chosen_abs
         current_guess="$cred"
-        chosen="$(zenity --file-selection \
+        chosen="$(yad "${YAD_OPTS[@]}" --file-selection \
           --title="Escolha o arquivo de credencial (somente caminho)" \
           --filename="$current_guess" 2>/dev/null)" || continue
         chosen_abs="$(realpath -m "$chosen")"
@@ -581,7 +579,7 @@ edit_single_remote() {
         return 0
         ;;
       "Excluir remote")
-        zenity --question --title="Confirmar" --text="Excluir este remote?" 2>/dev/null || continue
+        yad "${YAD_OPTS[@]}" --question --title="Confirmar" --text="Excluir este remote?" 2>/dev/null || continue
         remote_remove_at_index "$idx"
         config_write || return 1
         config_load "$CONF_FILE" || true
@@ -600,11 +598,11 @@ edit_remotes_menu() {
     fi
 
     local args=(
-      --list
+      --list --print-column=1 --separator=""
       --title="Configuração de remotes"
-      --ok-label="Editar"
-      --cancel-label="Voltar"
-      --width=1020
+      --button="Editar:0"
+      --button="Voltar:1"
+      --width=800
       --height=520
       --text="Selecione um remote para editar.\n(Use a linha 'NOVO REMOTE' para inserir.)"
       --print-column=1
@@ -622,7 +620,7 @@ edit_remotes_menu() {
     args+=("novo" "NOVO REMOTE" "" "" "")
 
     local selected
-    selected="$(zenity "${args[@]}" 2>/dev/null)" || return 0
+    selected="$(yad "${YAD_OPTS[@]}" "${args[@]}" 2>/dev/null)" || return 0
     [[ -n "$selected" ]] || continue
     edit_single_remote "$selected"
   done
@@ -634,10 +632,10 @@ edit_config_menu() {
 
   while true; do
     local action
-    action="$(zenity --list \
+    action="$(yad "${YAD_OPTS[@]}" --list --print-column=1 --separator="" \
       --title="Editar configurações" \
-      --ok-label="OK" \
-      --cancel-label="Voltar" \
+      --button="OK:0" \
+      --button="Voltar:1" \
       --width=760 --height=360 \
       --column="Opção" \
       "Visualizar arquivo atual" \
@@ -656,7 +654,7 @@ edit_config_menu() {
         edit_remotes_menu
         ;;
       "Reverter edição")
-        zenity --question --title="Reverter" --text="Reverter para o estado do início deste menu de edição?" 2>/dev/null || continue
+        yad "${YAD_OPTS[@]}" --question --title="Reverter" --text="Reverter para o estado do início deste menu de edição?" 2>/dev/null || continue
         printf '%s\n' "$snapshot" > "$CONF_FILE"
         chmod 600 "$CONF_FILE" 2>/dev/null || true
         config_load "$CONF_FILE" || true
@@ -693,7 +691,7 @@ system_run_with_progress() {
     done
     echo "100"
     echo "# Concluído"
-  ) | zenity --progress \
+  ) | yad "${YAD_OPTS[@]}" --progress \
     --title="$title" \
     --width=680 \
     --auto-close \
@@ -752,10 +750,10 @@ system_run_interactive_with_log() {
 }
 
 ui_show_log() {
-  zenity --text-info \
+  yad "${YAD_OPTS[@]}" --text-info \
     --title="Log da execução" \
-    --ok-label="Fechar" \
-    --width=1000 --height=720 \
+    --button="Fechar:0" \
+    --width=800 --height=600 \
     --filename="$RUN_LOG" >/dev/null 2>&1 || true
 }
 
@@ -765,10 +763,10 @@ install_scripts_flow() {
     return 1
   }
 
-  zenity --question \
+  yad "${YAD_OPTS[@]}" --question \
     --title="Confirmação de instalação" \
-    --ok-label="Instalar" \
-    --cancel-label="Cancelar" \
+    --button="Instalar:0" \
+    --button="Cancelar:1" \
     --width=640 \
     --text="Executar $INSTALL_SCRIPT agora?" >/dev/null 2>&1 || return 0
 
@@ -794,11 +792,11 @@ refresh_remote_flow() {
   }
 
   local args=(
-    --list
+    --list --print-column=1 --separator=""
     --title="Refresh de remotes" 
-    --ok-label="OK"
-    --cancel-label="Voltar"
-    --width=980
+    --button="OK:0"
+    --button="Voltar:1"
+    --width=800
     --height=500
     --print-column=1
     --column="ID"
@@ -814,14 +812,14 @@ refresh_remote_flow() {
   done
 
   local selected
-  selected="$(zenity "${args[@]}" 2>/dev/null)" || return 0
+  selected="$(yad "${YAD_OPTS[@]}" "${args[@]}" 2>/dev/null)" || return 0
   [[ -n "$selected" ]] || return 0
 
   local remote_name="${REMOTE_NAMES[$selected]}"
-  zenity --question \
+  yad "${YAD_OPTS[@]}" --question \
     --title="Autorizar remote" \
-    --ok-label="Autorizar" \
-    --cancel-label="Cancelar" \
+    --button="Autorizar:0" \
+    --button="Cancelar:1" \
     --width=700 \
     --text="Remote selecionado: ${remote_name}\n\nAbra o navegador no perfil correto desta conta e, em seguida, clique em Autorizar." >/dev/null 2>&1 || return 0
 
@@ -840,19 +838,19 @@ uninstall_scripts_flow() {
     return 0
   fi
 
-  zenity --question \
+  yad "${YAD_OPTS[@]}" --question \
     --title="Confirmar desinstalação" \
-    --ok-label="Desinstalar" \
-    --cancel-label="Cancelar" \
+    --button="Desinstalar:0" \
+    --button="Cancelar:1" \
     --width=720 \
     --text="Desinstalar scripts do RDrive?\n\nSerão removidos:\n- Scripts em ~/.local/lib/rdrive/\n- Links em ~/.local/bin/\n- Autostart em ~/.config/autostart/\n- Atalho da GUI em ~/.local/share/applications/\n- Ícone em ~/.local/share/icons/\n\nO arquivo de configuração pode ser removido opcionalmente." >/dev/null 2>&1 || return 0
 
   local unmount_first="no"
   if [[ -x "$BIN_MOUNT" ]]; then
-    if zenity --question \
+    if yad "${YAD_OPTS[@]}" --question \
       --title="Desmontar remotes" \
-      --ok-label="Sim" \
-      --cancel-label="Não" \
+      --button="Sim:0" \
+      --button="Não:1" \
       --width=640 \
       --text="Desmontar todos os remotes antes de desinstalar?" >/dev/null 2>&1; then
       unmount_first="yes"
@@ -861,10 +859,10 @@ uninstall_scripts_flow() {
 
   local remove_conf="no"
   if [[ -f "$CONF_FILE" ]]; then
-    if zenity --question \
+    if yad "${YAD_OPTS[@]}" --question \
       --title="Remover configuração" \
-      --ok-label="Sim" \
-      --cancel-label="Não" \
+      --button="Sim:0" \
+      --button="Não:1" \
       --width=640 \
       --text="Remover também o arquivo de configuração?\n\n$CONF_FILE" >/dev/null 2>&1; then
       remove_conf="yes"
@@ -937,12 +935,12 @@ uninstall_scripts_flow() {
 
   result+="Desinstalação concluída."
 
-  zenity --info \
+  yad "${YAD_OPTS[@]}" --info --button="Fechar:0" \
     --title="Desinstalação" \
     --width=680 \
     --text="$result" >/dev/null 2>&1 || true
 
-  return 0
+  exit 0
 }
 
 main_menu_loop() {
@@ -957,11 +955,11 @@ main_menu_loop() {
     fi
 
     local action
-    action="$(zenity --list \
+    action="$(yad "${YAD_OPTS[@]}" --list --print-column=1 --separator="" \
       --title="Menu principal" \
-      --ok-label="OK" \
-      --cancel-label="Fechar" \
-      --width=820 --height=660 \
+      --button="OK:0" \
+      --button="Fechar:1" \
+      --width=820 --height=560 \
       --text="Bem-vindo ao RDrive GUI.\n\nArquivo de configuração:\n$CONF_FILE\n\nEscolha uma ação:" \
       --column="Opção" \
       "──────── Configuração ────────" \
@@ -983,10 +981,10 @@ main_menu_loop() {
         ui_show_config_file
         ;;
       "Recarregar configuração do arquivo")
-        zenity --question \
+        yad "${YAD_OPTS[@]}" --question \
           --title="Recarregar configuração" \
-          --ok-label="Recarregar" \
-          --cancel-label="Cancelar" \
+          --button="Recarregar:0" \
+          --button="Cancelar:1" \
           --width=720 \
           --text="Esta ação descarta alterações em memória e recarrega o arquivo do disco.\n\nDeseja continuar?" >/dev/null 2>&1 || continue
 
@@ -997,17 +995,17 @@ main_menu_loop() {
         fi
         ;;
       "Resetar configuração para padrão")
-        zenity --question \
+        yad "${YAD_OPTS[@]}" --question \
           --title="Resetar configuração" \
-          --ok-label="Continuar" \
-          --cancel-label="Cancelar" \
+          --button="Continuar:0" \
+          --button="Cancelar:1" \
           --width=720 \
           --text="Esta ação vai sobrescrever o arquivo atual com os valores padrão.\n\nDeseja continuar?" >/dev/null 2>&1 || continue
 
-        zenity --question \
+        yad "${YAD_OPTS[@]}" --question \
           --title="Confirmação final" \
-          --ok-label="Resetar" \
-          --cancel-label="Cancelar" \
+          --button="Resetar:0" \
+          --button="Cancelar:1" \
           --width=720 \
           --text="Confirma resetar agora? Alterações atuais serão perdidas." >/dev/null 2>&1 || continue
 
@@ -1041,8 +1039,8 @@ main_menu_loop() {
 }
 
 system_check_prerequisites() {
-  [[ -n "$ZENITY_BIN" && -x "$ZENITY_BIN" ]] || {
-    echo "erro: zenity não encontrado." >&2
+  [[ -n "$YAD_BIN" && -x "$YAD_BIN" ]] || {
+    echo "erro: yad "${YAD_OPTS[@]}" não encontrado." >&2
     exit 1
   }
   command -v realpath >/dev/null 2>&1 || {
